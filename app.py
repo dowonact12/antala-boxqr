@@ -196,7 +196,8 @@ def parse_and_verify(qr_text):
         return {'valid': False, 'error': f'파싱 오류: {str(e)}'}
 
 
-init_db()
-
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    init_db()
+    app.run(debug=False, host='0.0.0.0', port=5000)
+else:
+    init_db()
