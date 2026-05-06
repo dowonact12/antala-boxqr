@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">미리보기 / Preview</h1>
+        <div class="flex gap-3">
+            <a href="/download/{{ data.box_number }}"
+               class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">PDF 다운로드</a>
+            <a href="/"
+               class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">새 박스 입력</a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-6">
+        <div class="bg-white p-6 rounded-lg shadow-sm border space-y-3">
+            <h2 class="font-semibold text-lg border-b pb-2">박스 정보</h2>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="text-gray-500">Box #</div>
+                <div class="font-mono">{{ data.box_number }}</div>
+                <div class="text-gray-500">Date</div>
+                <div>{{ data.ship_date }}</div>
+                <div class="text-gray-500">Buyer</div>
+                <div>{{ data.buyer }}</div>
+                <div class="text-gray-500">Invoice</div>
+                <div>{{ data.invoice_number }}</div>
+                <div class="text-gray-500">Packed by</div>
+                <div>{{ data.packed_by }}</div>
+                {% if data.total_weight %}
+                <div class="text-gray-500">Weight</div>
+                <div>{{ data.total_weight }} kg</div>
+                {% endif %}
+                {% if data.dimensions %}
+                <div class="text-gray-500">Dimensions</div>
+                <div>{{ data.dimensions }}</div>
+                {% endif %}
+            </div>
+
+            <h3 class="font-semibold pt-2 border-t">품목 내역</h3>
+            <table class="w-full text-sm">
+                <thead class="text-gray-500">
+                    <tr><th class="text-left">제품</th><th class="text-right">수량</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in data['items'] %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td class="text-right">{{ item.quantity }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="pt-2 border-t text-sm">
+                <span class="text-gray-500">Hash:</span>
+                <span class="font-mono bg-gray-100 px-2 py-0.5 rounded">{{ data.hash }}</span>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div class="bg-white p-6 rounded-lg shadow-sm border flex flex-col items-center gap-4">
+                <h2 class="font-semibold text-lg">QR Code</h2>
+                <img src="/qr-image/{{ data.box_number }}" alt="QR Code" class="w-64 h-64">
+                <details class="w-full">
+                    <summary class="cursor-pointer text-sm text-gray-500">QR 임베드 텍스트 보기</summary>
+                    <pre class="mt-2 bg-gray-50 p-3 rounded text-xs overflow-x-auto whitespace-pre-wrap">{{ qr_text }}</pre>
+                </details>
+            </div>
+
+            {% if data.photo_filename %}
+            <div class="bg-white p-4 rounded-lg shadow-sm border">
+                <h3 class="font-semibold text-sm mb-2">패킹 사진</h3>
+                <img src="/photo/{{ data.box_number }}" alt="Packing photo" class="w-full rounded">
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

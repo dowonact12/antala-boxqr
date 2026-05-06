@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="space-y-4">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">발급 이력 / History</h1>
+        <form method="GET" class="flex gap-2">
+            <input type="text" name="q" value="{{ search }}" placeholder="검색 (박스번호, 바이어, 인보이스)"
+                   class="border rounded px-3 py-2 w-72 focus:ring-2 focus:ring-blue-300 outline-none">
+            <button type="submit" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">검색</button>
+        </form>
+    </div>
+
+    {% if boxes %}
+    <form method="POST" action="/download-labels" id="label-form">
+        <div class="flex justify-end mb-2">
+            <button type="submit" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+                선택 항목 라벨 PDF (2x3)
+            </button>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 text-gray-600">
+                    <tr>
+                        <th class="px-3 py-2 text-left"><input type="checkbox" onclick="toggleAll(this)"></th>
+                        <th class="px-3 py-2 text-left">Box #</th>
+                        <th class="px-3 py-2 text-left">Date</th>
+                        <th class="px-3 py-2 text-left">Buyer</th>
+                        <th class="px-3 py-2 text-left">Invoice</th>
+                        <th class="px-3 py-2 text-right">Items</th>
+                        <th class="px-3 py-2 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for box in boxes %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-3 py-2">
+                            <input type="checkbox" name="box_numbers[]" value="{{ box.box_number }}">
+                        </td>
+                        <td class="px-3 py-2 font-mono">{{ box.box_number }}</td>
+                        <td class="px-3 py-2">{{ box.ship_date }}</td>
+                        <td class="px-3 py-2">{{ box.buyer }}</td>
+                        <td class="px-3 py-2">{{ box.invoice_number }}</td>
+                        <td class="px-3 py-2 text-right">{{ box['items']|length }}종</td>
+                        <td class="px-3 py-2 text-center space-x-2">
+                            <a href="/preview/{{ box.box_number }}" class="text-blue-600 hover:underline">보기</a>
+                            <a href="/download/{{ box.box_number }}" class="text-green-600 hover:underline">PDF</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </form>
+    {% else %}
+    <div class="bg-white p-8 rounded-lg shadow-sm border text-center text-gray-500">
+        {% if search %}검색 결과가 없습니다.{% else %}아직 발급된 박스가 없습니다.{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function toggleAll(el) {
+    document.querySelectorAll('input[name="box_numbers[]"]')
+        .forEach(cb => cb.checked = el.checked);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANTALA Box QR Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; }
+        .nav-link { @apply px-4 py-2 rounded hover:bg-gray-200 transition; }
+        .nav-link.active { @apply bg-blue-100 text-blue-700 font-semibold; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center gap-6">
+            <a href="/" class="text-xl font-bold text-gray-800">ANTALA Box QR</a>
+            <div class="flex gap-1">
+                <a href="/" class="nav-link">입력 / Input</a>
+                <a href="/history" class="nav-link">이력 / History</a>
+                <a href="/verify" class="nav-link">검증 / Verify</a>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-5xl mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

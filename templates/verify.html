@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <h1 class="text-2xl font-bold">해시 검증 / Verify</h1>
+    <p class="text-gray-600 text-sm">QR 코드를 스캔해서 나온 텍스트를 아래에 붙여넣으세요.</p>
+
+    <form method="POST" class="space-y-4">
+        <textarea name="qr_text" rows="14" required
+                  class="w-full border rounded-lg px-4 py-3 font-mono text-sm focus:ring-2 focus:ring-blue-300 outline-none"
+                  placeholder="ANTALA PACKING SLIP&#10;===================&#10;Box #: 2026-0506-001&#10;...">{{ qr_text }}</textarea>
+        <button type="submit"
+                class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">검증하기 / Verify</button>
+    </form>
+
+    {% if result %}
+    <div class="p-4 rounded-lg border {% if result.valid %}bg-green-50 border-green-300{% else %}bg-red-50 border-red-300{% endif %}">
+        {% if result.valid %}
+        <div class="flex items-center gap-2 text-green-700 font-semibold text-lg">
+            <span>&#10004;</span> 검증 성공 - 정상 패킹 슬립
+        </div>
+        <div class="mt-2 text-sm text-green-800">
+            <p>Box #: {{ result.box_number }}</p>
+            <p>Date: {{ result.ship_date }}</p>
+            <p>Hash: {{ result.hash }}</p>
+        </div>
+        {% else %}
+        <div class="flex items-center gap-2 text-red-700 font-semibold text-lg">
+            <span>&#10008;</span> 검증 실패
+        </div>
+        <div class="mt-2 text-sm text-red-800">
+            {{ result.error }}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
