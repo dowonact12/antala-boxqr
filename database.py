@@ -90,6 +90,17 @@ def get_box(box_number):
     return None
 
 
+def get_box_by_hash(hash_code):
+    conn = _connect()
+    row = conn.execute("SELECT * FROM boxes WHERE hash = ?", (hash_code,)).fetchone()
+    conn.close()
+    if row:
+        result = dict(row)
+        result['items'] = json.loads(result['items'])
+        return result
+    return None
+
+
 def get_all_boxes(search=None):
     conn = _connect()
     if search:

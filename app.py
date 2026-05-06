@@ -3,7 +3,7 @@ import json
 from flask import Flask, render_template, request, redirect, url_for, send_file, jsonify
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
-from database import init_db, save_box, get_box, get_all_boxes, generate_box_number
+from database import init_db, save_box, get_box, get_box_by_hash, get_all_boxes, generate_box_number
 from hash_util import generate_hash, verify_hash
 from qr_generator import build_qr_text, generate_qr_bytes
 from pdf_generator import generate_full_pdf, generate_label_pdf
@@ -144,56 +144,24 @@ def history():
 @app.route('/verify', methods=['GET', 'POST'])
 def verify():
     result = None
-    qr_text = ''
+    code = ''
     if request.method == 'POST':
-        qr_text = request.form.get('qr_text', '').strip()
-        result = parse_and_verify(qr_text)
-    return render_template('verify.html', result=result, qr_text=qr_text)
+        code = request.form.get('code', '').strip().lower()
+        if code:
+            data = get_box_by_hash(code)
+            if data:
+                result = {'valid': True, 'data': data}
+            else:
+                result = {'valid': False}
+    return render_template('verify.html', result=result, code=code)
 
 
-def parse_and_verify(qr_text):
-    lines = qr_text.strip().split('\n')
-    try:
-        box_number = None
-        ship_date = None
-        items = []
-        verify_hash_val = None
-        in_contents = False
-
-        for line in lines:
-            line = line.strip()
-            if line.startswith('Box #:'):
-                box_number = line.split(':', 1)[1].strip()
-            elif line.startswith('Date:'):
-                ship_date = line.split(':', 1)[1].strip()
-            elif line == 'CONTENTS:':
-                in_contents = True
-            elif line.startswith('- ') and in_contents:
-                item_str = line[2:]
-                parts = item_str.rsplit(' x ', 1)
-                if len(parts) == 2:
-                    name = parts[0].strip()
-                    qty = int(parts[1].strip())
-                    items.append({'name': name, 'quantity': qty})
-            elif line.startswith('Total:'):
-                in_contents = False
-            elif line.startswith('Verify:'):
-                verify_hash_val = line.split(':', 1)[1].strip()
-
-        if not all([box_number, ship_date, items, verify_hash_val]):
-            return {'valid': False, 'error': 'QR 텍스트 파싱 실패. 올바른 형식인지 확인하세요.'}
-
-        is_valid = verify_hash(box_number, ship_date, items, verify_hash_val)
-        return {
-            'valid': is_valid,
-            'box_number': box_number,
-            'ship_date': ship_date,
-            'items': items,
-            'hash': verify_hash_val,
-            'error': None if is_valid else '해시 불일치 - 위변조 가능성 있음'
-        }
-    except Exception as e:
-        return {'valid': False, 'error': f'파싱 오류: {str(e)}'}
+@app.route('/v/<code>')
+def verify_direct(code):
+    data = get_box_by_hash(code.strip().lower())
+    if data:
+        return render_template('verify.html', result={'valid': True, 'data': data}, code=code)
+    return render_template('verify.html', result={'valid': False}, code=code)
 
 
 if __name__ == '__main__':
