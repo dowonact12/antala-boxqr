@@ -21,6 +21,8 @@ def register_fonts():
     font_paths = [
         "C:/Windows/Fonts/malgun.ttf",
         "C:/Windows/Fonts/gulim.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     ]
     for fp in font_paths:
         if os.path.exists(fp):
