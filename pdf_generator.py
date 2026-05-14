@@ -8,21 +8,13 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from qr_generator import build_qr_text, generate_qr_image
 
-BASE_DIR = os.path.dirname(__file__)
-OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
-PHOTOS_DIR = os.path.join(BASE_DIR, 'photos')
-
-
-def ensure_output_dir():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
 
 def register_fonts():
     font_paths = [
-        "C:/Windows/Fonts/malgun.ttf",
-        "C:/Windows/Fonts/gulim.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "C:/Windows/Fonts/malgun.ttf",
+        "C:/Windows/Fonts/gulim.ttc",
     ]
     for fp in font_paths:
         if os.path.exists(fp):
@@ -34,20 +26,17 @@ def register_fonts():
     return 'Helvetica'
 
 
-def generate_full_pdf(data):
-    ensure_output_dir()
+def generate_full_pdf(data, photo_bytes=None):
     font_name = register_fonts()
-    filename = f"{data['box_number']}.pdf"
-    filepath = os.path.join(OUTPUT_DIR, filename)
+    buf = BytesIO()
 
     w, h = A4
-    c = canvas.Canvas(filepath, pagesize=A4)
+    c = canvas.Canvas(buf, pagesize=A4)
 
     # === PAGE 1: Info + QR ===
     mid_y = h / 2
     y = h - 2 * cm
 
-    # Title
     c.setFont(font_name, 18)
     c.drawString(2 * cm, y, "ANTALA PACKING SLIP")
     y -= 1 * cm
@@ -102,10 +91,10 @@ def generate_full_pdf(data):
     # === BOTTOM: QR Code ===
     qr_text = build_qr_text(data)
     qr_img = generate_qr_image(qr_text, box_size=8, border=2)
-    buf = BytesIO()
-    qr_img.save(buf, format='PNG')
-    buf.seek(0)
-    img_reader = ImageReader(buf)
+    qr_buf = BytesIO()
+    qr_img.save(qr_buf, format='PNG')
+    qr_buf.seek(0)
+    img_reader = ImageReader(qr_buf)
 
     qr_size = 8 * cm
     qr_x = (w - qr_size) / 2
@@ -123,10 +112,8 @@ def generate_full_pdf(data):
     c.drawCentredString(w / 2, text_y, "Scan with any QR reader app (not with mobile phone camera)")
 
     # === PAGE 2: Photo (if exists) ===
-    photo_filename = data.get('photo_filename')
-    if photo_filename:
-        photo_path = os.path.join(PHOTOS_DIR, photo_filename)
-        if os.path.exists(photo_path):
+    if photo_bytes:
+        try:
             c.showPage()
             y = h - 2 * cm
             c.setFont(font_name, 14)
@@ -135,33 +122,30 @@ def generate_full_pdf(data):
             c.setFont(font_name, 9)
             c.drawString(2 * cm, y, f"{data['buyer']} / {data['invoice_number']} / {data['ship_date']}")
 
-            # Fit photo in remaining space
             max_w = w - 4 * cm
             max_h = h - 5 * cm
-            try:
-                photo_reader = ImageReader(photo_path)
-                img_w, img_h = photo_reader.getSize()
-                ratio = min(max_w / img_w, max_h / img_h)
-                draw_w = img_w * ratio
-                draw_h = img_h * ratio
-                x_pos = (w - draw_w) / 2
-                y_pos = (h - 4 * cm - draw_h) / 2
-                c.drawImage(photo_reader, x_pos, y_pos, width=draw_w, height=draw_h)
-            except:
-                c.drawString(2 * cm, h / 2, "Photo could not be loaded")
+            photo_reader = ImageReader(BytesIO(photo_bytes))
+            img_w, img_h = photo_reader.getSize()
+            ratio = min(max_w / img_w, max_h / img_h)
+            draw_w = img_w * ratio
+            draw_h = img_h * ratio
+            x_pos = (w - draw_w) / 2
+            y_pos = (h - 4 * cm - draw_h) / 2
+            c.drawImage(photo_reader, x_pos, y_pos, width=draw_w, height=draw_h)
+        except:
+            c.drawString(2 * cm, h / 2, "Photo could not be loaded")
 
     c.save()
-    return filepath
+    buf.seek(0)
+    return buf
 
 
 def generate_label_pdf(boxes_data):
-    ensure_output_dir()
     font_name = register_fonts()
-    filename = "labels_" + boxes_data[0]['box_number'] + ".pdf"
-    filepath = os.path.join(OUTPUT_DIR, filename)
+    buf = BytesIO()
 
     w, h = A4
-    c = canvas.Canvas(filepath, pagesize=A4)
+    c = canvas.Canvas(buf, pagesize=A4)
 
     col_w = w / 2
     row_h = h / 3
@@ -180,10 +164,10 @@ def generate_label_pdf(boxes_data):
 
         qr_text = build_qr_text(data)
         qr_img = generate_qr_image(qr_text, box_size=6, border=1)
-        buf = BytesIO()
-        qr_img.save(buf, format='PNG')
-        buf.seek(0)
-        img_reader = ImageReader(buf)
+        qr_buf = BytesIO()
+        qr_img.save(qr_buf, format='PNG')
+        qr_buf.seek(0)
+        img_reader = ImageReader(qr_buf)
 
         c.drawImage(img_reader, cx - qr_size / 2, cy - qr_size / 2 + 0.5 * cm,
                     width=qr_size, height=qr_size)
@@ -193,4 +177,5 @@ def generate_label_pdf(boxes_data):
         c.drawCentredString(cx, cy - qr_size / 2 - 0.4 * cm, f"Verify: {data['hash']}")
 
     c.save()
-    return filepath
+    buf.seek(0)
+    return buf

@@ -1,24 +1,19 @@
 import os
-import json
+from io import BytesIO
 from flask import Flask, render_template, request, redirect, url_for, send_file, jsonify
 from dotenv import load_dotenv
-from werkzeug.utils import secure_filename
-from database import init_db, save_box, get_box, get_box_by_hash, get_all_boxes, generate_box_number
-from hash_util import generate_hash, verify_hash
+from database import init_db, save_box, get_box, get_box_by_hash, get_box_photo, get_all_boxes, generate_box_number
+from hash_util import generate_hash
 from qr_generator import build_qr_text, generate_qr_bytes
 from pdf_generator import generate_full_pdf, generate_label_pdf
 
 load_dotenv()
 
-app = Flask(__name__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__,
+            template_folder=os.path.join(BASE_DIR, 'templates'),
+            static_folder=os.path.join(BASE_DIR, 'static'))
 app.secret_key = os.getenv('SECRET_KEY', 'dev')
-
-BASE_DIR = os.path.dirname(__file__)
-PHOTOS_DIR = os.path.join(BASE_DIR, 'photos')
-OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
-
-os.makedirs(PHOTOS_DIR, exist_ok=True)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 
@@ -59,25 +54,22 @@ def submit():
         'dimensions': request.form.get('dimensions') or None,
         'note': request.form.get('note') or None,
         'packed_by': request.form.get('packed_by') or 'Dowon',
-        'photo_filename': None,
+        'photo_data': None,
+        'photo_ext': None,
     }
 
     # Handle photo upload
     photo = request.files.get('photo')
     if photo and photo.filename and allowed_file(photo.filename):
         ext = photo.filename.rsplit('.', 1)[1].lower()
-        photo_filename = f"{data['box_number']}.{ext}"
-        photo.save(os.path.join(PHOTOS_DIR, photo_filename))
-        data['photo_filename'] = photo_filename
+        data['photo_data'] = photo.read()
+        data['photo_ext'] = ext
 
     # Generate hash
     data['hash'] = generate_hash(data['box_number'], data['ship_date'], data['items'])
 
     # Save to DB
     save_box(data)
-
-    # Generate PDF
-    generate_full_pdf(data)
 
     return redirect(url_for('preview', box_number=data['box_number']))
 
@@ -93,13 +85,12 @@ def preview(box_number):
 
 @app.route('/download/<box_number>')
 def download_pdf(box_number):
-    filepath = os.path.join(OUTPUT_DIR, f"{box_number}.pdf")
-    if not os.path.exists(filepath):
-        data = get_box(box_number)
-        if not data:
-            return "Box not found", 404
-        filepath = generate_full_pdf(data)
-    return send_file(filepath, as_attachment=True, download_name=f"{box_number}.pdf")
+    data = get_box(box_number)
+    if not data:
+        return "Box not found", 404
+    photo_bytes, _ = get_box_photo(box_number)
+    buf = generate_full_pdf(data, photo_bytes=photo_bytes)
+    return send_file(buf, as_attachment=True, download_name=f"{box_number}.pdf", mimetype='application/pdf')
 
 
 @app.route('/download-labels', methods=['POST'])
@@ -112,8 +103,8 @@ def download_labels():
             boxes.append(data)
     if not boxes:
         return "No boxes found", 404
-    filepath = generate_label_pdf(boxes)
-    return send_file(filepath, as_attachment=True, download_name="labels.pdf")
+    buf = generate_label_pdf(boxes)
+    return send_file(buf, as_attachment=True, download_name="labels.pdf", mimetype='application/pdf')
 
 
 @app.route('/qr-image/<box_number>')
@@ -128,10 +119,11 @@ def qr_image(box_number):
 
 @app.route('/photo/<box_number>')
 def photo(box_number):
-    data = get_box(box_number)
-    if not data or not data.get('photo_filename'):
+    photo_bytes, photo_ext = get_box_photo(box_number)
+    if not photo_bytes:
         return "No photo", 404
-    return send_file(os.path.join(PHOTOS_DIR, data['photo_filename']))
+    mimetype = f'image/{"jpeg" if photo_ext == "jpg" else photo_ext}'
+    return send_file(BytesIO(photo_bytes), mimetype=mimetype)
 
 
 @app.route('/history')
@@ -164,8 +156,10 @@ def verify_direct(code):
     return render_template('verify.html', result={'valid': False}, code=code)
 
 
+try:
+    init_db()
+except Exception:
+    pass
+
 if __name__ == '__main__':
-    init_db()
-    app.run(debug=False, host='0.0.0.0', port=5000)
-else:
-    init_db()
+    app.run(debug=True, host='0.0.0.0', port=5000)

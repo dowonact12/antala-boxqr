@@ -1,87 +1,101 @@
-import sqlite3
-import json
 import os
-import threading
+import json
+import psycopg2
+import psycopg2.extras
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'boxes.db')
-_lock = threading.Lock()
+DATABASE_URL = os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL', '')
+if DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 
 
 def _connect():
-    conn = sqlite3.connect(DB_PATH, timeout=30)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=30000")
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    conn.autocommit = True
     return conn
 
 
 def init_db():
-    with _lock:
-        conn = _connect()
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS boxes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                box_number TEXT UNIQUE NOT NULL,
-                ship_date TEXT NOT NULL,
-                buyer TEXT NOT NULL,
-                invoice_number TEXT NOT NULL,
-                items TEXT NOT NULL,
-                total_weight REAL,
-                dimensions TEXT,
-                note TEXT,
-                packed_by TEXT NOT NULL DEFAULT 'Dowon',
-                photo_filename TEXT,
-                hash TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-            )
-        ''')
-        conn.commit()
-        conn.close()
+    if not DATABASE_URL:
+        return
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS boxes (
+            id SERIAL PRIMARY KEY,
+            box_number TEXT UNIQUE NOT NULL,
+            ship_date TEXT NOT NULL,
+            buyer TEXT NOT NULL,
+            invoice_number TEXT NOT NULL,
+            items TEXT NOT NULL,
+            total_weight REAL,
+            dimensions TEXT,
+            note TEXT,
+            packed_by TEXT NOT NULL DEFAULT 'Dowon',
+            photo_data BYTEA,
+            photo_ext TEXT,
+            hash TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+    ''')
+    cur.close()
+    conn.close()
 
 
 def generate_box_number():
     today = datetime.now().strftime('%Y-%m%d')
-    with _lock:
-        conn = _connect()
-        row = conn.execute(
-            "SELECT COUNT(*) as cnt FROM boxes WHERE box_number LIKE ?",
-            (f"{today}-%",)
-        ).fetchone()
-        conn.close()
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COUNT(*) as cnt FROM boxes WHERE box_number LIKE %s",
+        (f"{today}-%",)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
     seq = (row['cnt'] or 0) + 1
     return f"{today}-{seq:03d}"
 
 
 def save_box(data):
-    with _lock:
-        conn = _connect()
-        try:
-            conn.execute('''
-                INSERT INTO boxes (box_number, ship_date, buyer, invoice_number, items,
-                                  total_weight, dimensions, note, packed_by, photo_filename, hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                data['box_number'],
-                data['ship_date'],
-                data['buyer'],
-                data['invoice_number'],
-                json.dumps(data['items'], ensure_ascii=False),
-                data.get('total_weight'),
-                data.get('dimensions'),
-                data.get('note'),
-                data.get('packed_by', 'Dowon'),
-                data.get('photo_filename'),
-                data['hash']
-            ))
-            conn.commit()
-        finally:
-            conn.close()
+    conn = _connect()
+    cur = conn.cursor()
+    photo_data = data.get('photo_data')
+    if photo_data:
+        photo_data = psycopg2.Binary(photo_data)
+    cur.execute('''
+        INSERT INTO boxes (box_number, ship_date, buyer, invoice_number, items,
+                          total_weight, dimensions, note, packed_by, photo_data, photo_ext, hash)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ''', (
+        data['box_number'],
+        data['ship_date'],
+        data['buyer'],
+        data['invoice_number'],
+        json.dumps(data['items'], ensure_ascii=False),
+        data.get('total_weight'),
+        data.get('dimensions'),
+        data.get('note'),
+        data.get('packed_by', 'Dowon'),
+        photo_data,
+        data.get('photo_ext'),
+        data['hash']
+    ))
+    cur.close()
+    conn.close()
 
 
 def get_box(box_number):
     conn = _connect()
-    row = conn.execute("SELECT * FROM boxes WHERE box_number = ?", (box_number,)).fetchone()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, box_number, ship_date, buyer, invoice_number, items, total_weight, "
+        "dimensions, note, packed_by, photo_ext, hash, created_at "
+        "FROM boxes WHERE box_number = %s",
+        (box_number,)
+    )
+    row = cur.fetchone()
+    cur.close()
     conn.close()
     if row:
         result = dict(row)
@@ -90,9 +104,32 @@ def get_box(box_number):
     return None
 
 
+def get_box_photo(box_number):
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT photo_data, photo_ext FROM boxes WHERE box_number = %s AND photo_data IS NOT NULL",
+        (box_number,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if row and row['photo_data']:
+        return bytes(row['photo_data']), row['photo_ext']
+    return None, None
+
+
 def get_box_by_hash(hash_code):
     conn = _connect()
-    row = conn.execute("SELECT * FROM boxes WHERE hash = ?", (hash_code,)).fetchone()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, box_number, ship_date, buyer, invoice_number, items, total_weight, "
+        "dimensions, note, packed_by, photo_ext, hash, created_at "
+        "FROM boxes WHERE hash = %s",
+        (hash_code,)
+    )
+    row = cur.fetchone()
+    cur.close()
     conn.close()
     if row:
         result = dict(row)
@@ -103,13 +140,23 @@ def get_box_by_hash(hash_code):
 
 def get_all_boxes(search=None):
     conn = _connect()
+    cur = conn.cursor()
     if search:
-        rows = conn.execute(
-            "SELECT * FROM boxes WHERE box_number LIKE ? OR buyer LIKE ? OR invoice_number LIKE ? ORDER BY created_at DESC",
+        cur.execute(
+            "SELECT id, box_number, ship_date, buyer, invoice_number, items, total_weight, "
+            "dimensions, note, packed_by, photo_ext, hash, created_at "
+            "FROM boxes WHERE box_number LIKE %s OR buyer LIKE %s OR invoice_number LIKE %s "
+            "ORDER BY created_at DESC",
             (f"%{search}%", f"%{search}%", f"%{search}%")
-        ).fetchall()
+        )
     else:
-        rows = conn.execute("SELECT * FROM boxes ORDER BY created_at DESC").fetchall()
+        cur.execute(
+            "SELECT id, box_number, ship_date, buyer, invoice_number, items, total_weight, "
+            "dimensions, note, packed_by, photo_ext, hash, created_at "
+            "FROM boxes ORDER BY created_at DESC"
+        )
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     results = []
     for row in rows:
