@@ -166,11 +166,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('form').addEventListener('submit', async (e) => {
         const photoInput = document.querySelector('input[name="photo"]');
         const file = photoInput.files[0];
-        if (!file || file.size < 3 * 1024 * 1024) return; // 3MB 이하면 그냥 제출
+        if (!file || !file.type.startsWith('image/')) return;
         e.preventDefault();
         const btn = document.querySelector('button[type="submit"]');
         btn.disabled = true; btn.textContent = '사진 압축 중...';
-        const blob = await compressImage(file, 1200, 0.7);
+        const blob = await compressImage(file, 800, 0.6);
         if (blob) {
             const compressed = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {type: 'image/jpeg'});
             const dt = new DataTransfer();
