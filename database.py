@@ -67,6 +67,18 @@ def save_box(data):
         INSERT INTO boxes (box_number, ship_date, buyer, invoice_number, items,
                           total_weight, dimensions, note, packed_by, photo_data, photo_ext, hash)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (box_number) DO UPDATE SET
+            ship_date = EXCLUDED.ship_date,
+            buyer = EXCLUDED.buyer,
+            invoice_number = EXCLUDED.invoice_number,
+            items = EXCLUDED.items,
+            total_weight = EXCLUDED.total_weight,
+            dimensions = EXCLUDED.dimensions,
+            note = EXCLUDED.note,
+            packed_by = EXCLUDED.packed_by,
+            photo_data = EXCLUDED.photo_data,
+            photo_ext = EXCLUDED.photo_ext,
+            hash = EXCLUDED.hash
     ''', (
         data['box_number'],
         data['ship_date'],
