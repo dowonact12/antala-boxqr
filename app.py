@@ -39,44 +39,48 @@ def api_box_number():
 
 @app.route('/submit', methods=['POST'])
 def submit():
-    items = []
-    names = request.form.getlist('item_name[]')
-    quantities = request.form.getlist('item_qty[]')
-    for name, qty in zip(names, quantities):
-        if name.strip() and qty.strip():
-            items.append({
-                'name': name.strip(),
-                'quantity': int(qty)
-            })
+    try:
+        items = []
+        names = request.form.getlist('item_name[]')
+        quantities = request.form.getlist('item_qty[]')
+        for name, qty in zip(names, quantities):
+            if name.strip() and qty.strip():
+                items.append({
+                    'name': name.strip(),
+                    'quantity': int(qty)
+                })
 
-    data = {
-        'box_number': request.form['box_number'],
-        'ship_date': request.form['ship_date'],
-        'buyer': request.form['buyer'],
-        'invoice_number': request.form['invoice_number'],
-        'items': items,
-        'total_weight': request.form.get('total_weight') or None,
-        'dimensions': request.form.get('dimensions') or None,
-        'note': request.form.get('note') or None,
-        'packed_by': request.form.get('packed_by') or 'Dowon',
-        'photo_data': None,
-        'photo_ext': None,
-    }
+        data = {
+            'box_number': request.form['box_number'],
+            'ship_date': request.form['ship_date'],
+            'buyer': request.form['buyer'],
+            'invoice_number': request.form['invoice_number'],
+            'items': items,
+            'total_weight': request.form.get('total_weight') or None,
+            'dimensions': request.form.get('dimensions') or None,
+            'note': request.form.get('note') or None,
+            'packed_by': request.form.get('packed_by') or 'Dowon',
+            'photo_data': None,
+            'photo_ext': None,
+        }
 
-    # Handle photo upload
-    photo = request.files.get('photo')
-    if photo and photo.filename and allowed_file(photo.filename):
-        ext = photo.filename.rsplit('.', 1)[1].lower()
-        data['photo_data'] = photo.read()
-        data['photo_ext'] = ext
+        # Handle photo upload
+        photo = request.files.get('photo')
+        if photo and photo.filename and allowed_file(photo.filename):
+            ext = photo.filename.rsplit('.', 1)[1].lower()
+            data['photo_data'] = photo.read()
+            data['photo_ext'] = ext
 
-    # Generate hash
-    data['hash'] = generate_hash(data['box_number'], data['ship_date'], data['items'])
+        # Generate hash
+        data['hash'] = generate_hash(data['box_number'], data['ship_date'], data['items'])
 
-    # Save to DB
-    save_box(data)
+        # Save to DB
+        save_box(data)
 
-    return redirect(url_for('preview', box_number=data['box_number']))
+        return redirect(url_for('preview', box_number=data['box_number']))
+    except Exception as e:
+        import traceback
+        return f"<h1>Error</h1><pre>{traceback.format_exc()}</pre>", 500
 
 
 @app.route('/preview/<box_number>')
