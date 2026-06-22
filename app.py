@@ -27,6 +27,11 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/health')
+def health():
+    return 'ok'
+
+
 @app.route('/api/box-number')
 def api_box_number():
     return jsonify({'box_number': generate_box_number()})
